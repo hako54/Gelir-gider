@@ -1,0 +1,28 @@
+{
+  "name": "kasa-defteri",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gelir, gider ve düzenli ödeme takip uygulaması",
+  "scripts": {
+    "serve": "npx --yes http-server www -p 8080 -c-1",
+    "runtime": "cp node_modules/@capacitor/core/dist/capacitor.js www/js/capacitor.js",
+    "sync": "npm run runtime && cap sync",
+    "android": "npm run sync && cap open android",
+    "ios": "npm run sync && cap open ios",
+    "assets": "capacitor-assets generate --android --ios --iconBackgroundColor '#2b3a8c' --iconBackgroundColorDark '#2b3a8c' --splashBackgroundColor '#f3f5f8' --splashBackgroundColorDark '#0e1116'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3"
+  }
+}

@@ -10,6 +10,23 @@
   "background_color": "#f3f5f8",
   "theme_color": "#2b3a8c",
   "icons": [
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "icons/icon-192.webp",
+      "type": "image/webp",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.webp",
+      "type": "image/webp",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

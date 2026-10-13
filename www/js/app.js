@@ -110,11 +110,30 @@ function initials(name) {
   return trUpper(w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2));
 }
 
+/* ================= mobil (Capacitor) ================= */
+// Uygulama Android/iOS içinde çalışırken Capacitor eklentileri kullanılır; tarayıcıda bu nesneler null kalır.
+const Cap = window.Capacitor;
+const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+const plugin = name => (isNative && Cap.registerPlugin ? Cap.registerPlugin(name) : null);
+const Prefs = plugin('Preferences'), Notif = plugin('LocalNotifications'), AppP = plugin('App');
+const FS = plugin('Filesystem'), ShareP = plugin('Share');
+if (isNative) document.documentElement.classList.add('native');
+
 /* ================= depolama ================= */
+// Telefonda veriler Preferences'ta (Android SharedPreferences / iOS UserDefaults) kalıcı tutulur,
+// localStorage yalnızca yedek kopya olarak yazılır. Tarayıcıda yalnızca localStorage kullanılır.
 const STORE_KEY = 'kasadefteri.v1';
 const store = {
-  read() { try { return localStorage.getItem(STORE_KEY); } catch { return null; } },
-  write(v) { try { localStorage.setItem(STORE_KEY, v); return true; } catch { return false; } },
+  async read() {
+    if (Prefs) { try { const { value } = await Prefs.get({ key: STORE_KEY }); if (value) return value; } catch { /* localStorage'a düş */ } }
+    try { return localStorage.getItem(STORE_KEY); } catch { return null; }
+  },
+  write(v) {
+    let ok = true;
+    try { localStorage.setItem(STORE_KEY, v); } catch { ok = !!Prefs; }
+    if (Prefs) Prefs.set({ key: STORE_KEY, value: v }).catch(() => toast('Kaydedilemedi: cihaz depolamasına yazılamadı.'));
+    return ok;
+  },
 };
 const DEFAULT_CATS = {
   expense: ['Market', 'Kira', 'Fatura', 'Kredi', 'Kredi kartı', 'Aidat', 'Yeme-içme', 'Ulaşım', 'Sağlık', 'Eğitim', 'Giyim', 'Eğlence', 'Abonelik', 'Sigorta', 'Vergi', 'Diğer'],
@@ -123,7 +142,7 @@ const DEFAULT_CATS = {
 function emptyState(settings) {
   return {
     version: 1,
-    settings: { currency: 'TRY', theme: 'system', remindDays: 5, ...(settings || {}) },
+    settings: { currency: 'TRY', theme: 'system', remindDays: 5, notify: true, notifyHour: 9, ...(settings || {}) },
     categories: JSON.parse(JSON.stringify(DEFAULT_CATS)),
     transactions: [], plans: [], overrides: {}, demo: false,
   };
@@ -147,6 +166,7 @@ function normalize(s) {
 let state;
 function save() {
   if (!store.write(JSON.stringify(state))) toast('Kaydedilemedi: tarayıcı depolaması kapalı ya da dolu.');
+  scheduleReminders();
 }
 
 /* ================= örnek veri ================= */
@@ -265,6 +285,61 @@ function planStats(p) {
     }
   }
   return { paid, paidAmt, remaining, remAmt, next };
+}
+
+/* ================= hatırlatma bildirimleri ================= */
+// Her kayıttan sonra önümüzdeki 60 günün bildirimleri baştan kurulur. Aynı güne düşen ödemeler tek
+// bildirimde toplanır (iOS en fazla 64 bekleyen bildirime izin verir).
+let remindTimer;
+function scheduleReminders() {
+  if (!Notif) return;
+  clearTimeout(remindTimer);
+  remindTimer = setTimeout(() => syncReminders().catch(() => {}), 800);
+}
+async function syncReminders() {
+  const pending = await Notif.getPending();
+  if (pending.notifications.length) await Notif.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+  if (!state.settings.notify) return;
+  const perm = await Notif.checkPermissions();
+  if (perm.display !== 'granted') return;
+  rebuildIdx();
+  const hour = +state.settings.notifyHour || 9, lead = +state.settings.remindDays || 0;
+  const now = new Date(), horizon = ymd(addDays(now, 60)), cm = thisMonth();
+  const days = new Map(); // tarih -> { due: [], soon: [] }
+  const bucket = d => { if (!days.has(d)) days.set(d, { due: [], soon: [] }); return days.get(d); };
+  for (let k = 0; k <= 2; k++) for (const o of occsInMonth(addMonths(cm, k))) {
+    if (o.plan.dir !== 'expense' || !isOpen(o) || o.due > horizon) continue;
+    bucket(o.due).due.push(o);
+    if (lead > 0) bucket(ymd(addDays(parseD(o.due), -lead))).soon.push(o);
+  }
+  const list = (arr) => arr.map(o => `${o.plan.name} ${o.estimated ? '≈' : ''}${money(o.amount)}`).join(', ');
+  const at = d => { const x = parseD(d); x.setHours(hour, 0, 0, 0); return x; };
+  const out = [];
+  for (const [d, v] of [...days].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (at(d) <= now) continue;
+    const lines = [];
+    if (v.due.length) lines.push(`Bugün son gün: ${list(v.due)}`);
+    if (v.soon.length) lines.push(`${lead} gün sonra: ${list(v.soon)}`);
+    const n = v.due.length + v.soon.length;
+    out.push({
+      id: +d.replace(/-/g, ''), schedule: { at: at(d), allowWhileIdle: true },
+      title: v.due.length ? (v.due.length > 1 ? `${v.due.length} ödemenin son günü` : `${v.due[0].plan.name} için son gün`) : `Yaklaşan ${n > 1 ? n + ' ödeme' : 'ödeme'}`,
+      body: lines.join('\n'), smallIcon: 'ic_stat_kasa', extra: { tab: 'odemeler' },
+    });
+    if (out.length >= 58) break;
+  }
+  const late = overdueBefore(addMonths(cm, 1)).filter(o => o.plan.dir === 'expense');
+  if (late.length) {
+    const t = new Date(now); t.setHours(hour, 0, 0, 0); if (t <= now) t.setDate(t.getDate() + 1);
+    out.push({ id: 1, schedule: { at: t, allowWhileIdle: true }, title: `${late.length} gecikmiş ödemen var`, body: list(late.slice(0, 4)), smallIcon: 'ic_stat_kasa', extra: { tab: 'odemeler' } });
+  }
+  if (out.length) await Notif.schedule({ notifications: out });
+}
+async function enableReminders() {
+  if (!Notif) return false;
+  let perm = await Notif.checkPermissions();
+  if (perm.display !== 'granted') perm = await Notif.requestPermissions();
+  return perm.display === 'granted';
 }
 
 /* ================= arayüz durumu ================= */
@@ -733,6 +808,10 @@ function renderAyarlar() {
         <select id="s-theme" data-change="s-theme">${Object.entries({ system: 'Sistem', light: 'Açık', dark: 'Koyu' }).map(([k, v]) => `<option value="${k}" ${k === s.theme ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="setting"><div><b>Yaklaşan ödeme uyarısı</b><p>Son ödeme gününe bu kadar gün kala “Yaklaşıyor” olarak işaretlenir.</p></div>
         <select id="s-remind" data-change="s-remind">${[1, 2, 3, 5, 7, 10, 14].map(n => `<option value="${n}" ${n === +s.remindDays ? 'selected' : ''}>${n} gün önce</option>`).join('')}</select></div>
+      <div class="setting"><div><b>Ödeme hatırlatmaları</b><p>${isNative ? 'Son ödeme gününde ve yukarıdaki süre kadar önce bildirim gönderilir.' : 'Bildirimler Android ve iOS uygulamasında çalışır.'}</p></div>
+        <select id="s-notify" data-change="s-notify" ${isNative ? '' : 'disabled'}><option value="1" ${s.notify ? 'selected' : ''}>Açık</option><option value="0" ${s.notify ? '' : 'selected'}>Kapalı</option></select></div>
+      ${isNative && s.notify ? `<div class="setting"><div><b>Bildirim saati</b><p>Hatırlatmalar bu saatte gelir.</p></div>
+        <select id="s-hour" data-change="s-hour">${[7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21].map(h => `<option value="${h}" ${h === +s.notifyHour ? 'selected' : ''}>${pad(h)}:00</option>`).join('')}</select></div>` : ''}
     </div>
     <div class="card">
       <h2>Yedekleme</h2>
@@ -1041,7 +1120,14 @@ function markPaid(o, amount, date, note) {
 }
 
 /* ---- yedekleme ---- */
-function download(name, text, type) {
+async function download(name, text, type) {
+  if (FS && ShareP) {
+    try {
+      const { uri } = await FS.writeFile({ path: name, data: text, directory: 'CACHE', encoding: 'utf8' });
+      await ShareP.share({ title: name, url: uri, dialogTitle: 'Dosyayı kaydet ya da gönder' });
+    } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast('Dosya paylaşılamadı. Yedeği metin olarak kopyalayabilirsin.'); }
+    return;
+  }
   try {
     const url = URL.createObjectURL(new Blob([text], { type }));
     const a = document.createElement('a');
@@ -1164,6 +1250,11 @@ document.addEventListener('change', e => {
   else if (id === 's-cur') { state.settings.currency = v; save(); }
   else if (id === 's-theme') { state.settings.theme = v; applyTheme(); save(); }
   else if (id === 's-remind') { state.settings.remindDays = +v; save(); }
+  else if (id === 's-hour') { state.settings.notifyHour = +v; save(); }
+  else if (id === 's-notify') {
+    state.settings.notify = v === '1'; save();
+    if (state.settings.notify) enableReminders().then(ok => { if (ok) scheduleReminders(); else toast('Bildirim izni verilmedi. Telefon ayarlarından Kasa Defteri için bildirimlere izin ver.'); });
+  }
   render();
 });
 document.addEventListener('input', e => {
@@ -1214,14 +1305,28 @@ let lastDay = today();
 setInterval(() => { if (today() !== lastDay) { lastDay = today(); if (!sheet.open) render(); } }, 60000);
 
 /* ================= başlat ================= */
-const raw = store.read();
-if (raw) { try { state = normalize(JSON.parse(raw)); } catch { state = null; } }
-if (!state) { state = emptyState(); seedDemo(state); save(); }
-applyTheme();
-ui.tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'ozet';
-render();
+async function boot() {
+  const raw = await store.read();
+  if (raw) { try { state = normalize(JSON.parse(raw)); } catch { state = null; } }
+  const first = !state;
+  if (!state) { state = emptyState(); seedDemo(state); }
+  save();
+  applyTheme();
+  ui.tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'ozet';
+  render();
+  if (!isNative) return;
+  if (first && state.settings.notify) enableReminders().then(ok => ok && scheduleReminders()).catch(() => {});
+  Notif.addListener('localNotificationActionPerformed', a => setTab(a.notification?.extra?.tab || 'odemeler'));
+  AppP.addListener('backButton', () => {
+    if (sheet.open) closeSheet();
+    else if (ui.tab !== 'ozet') setTab('ozet');
+    else AppP.exitApp();
+  });
+  AppP.addListener('resume', () => { if (!sheet.open) render(); scheduleReminders(); });
+}
+boot();
 
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && window.self === window.top) {
+if (!isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && window.self === window.top) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 })();

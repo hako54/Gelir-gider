@@ -28,28 +28,48 @@ www/
   index.html            uygulama kabuğu
   css/styles.css        tema ve düzen (açık/koyu)
   js/app.js             tüm mantık (veri modeli, görünümler, grafikler)
+  js/capacitor.js       Capacitor çalışma zamanı (npm run runtime ile güncellenir)
   manifest.webmanifest  PWA tanımı
-  sw.js                 çevrimdışı önbellek
-  icons/icon.svg
+  sw.js                 çevrimdışı önbellek (yalnızca tarayıcıda)
+  icons/                PWA ikonları
+android/, ios/          native projeler
+assets/                 ikon ve açılış ekranı kaynakları
+capacitor.config.json   uygulama kimliği ve eklenti ayarları
 ```
 
-## Android ve iOS uygulamasına dönüştürme (Capacitor)
+## Android ve iOS uygulaması (Capacitor)
 
-`www/` klasörü doğrudan Capacitor'ın `webDir`'i olarak kullanılabilir:
+`android/` ve `ios/` klasörleri hazır native projelerdir; `www/` içindeki uygulamayı çalıştırırlar.
+
+| Özellik | Tarayıcı | Android / iOS |
+|---|---|---|
+| Veri saklama | localStorage | `@capacitor/preferences` (kalıcı) + localStorage yedek kopya |
+| Ödeme hatırlatmaları | — | `@capacitor/local-notifications`: son ödeme günü ve “X gün önce” bildirimleri, seçilebilir saat, gecikmiş ödeme uyarısı |
+| Yedek / CSV dışa aktarma | dosya indirme | `@capacitor/filesystem` + `@capacitor/share` ile paylaş menüsü (Drive, WhatsApp, Dosyalar…) |
+| Android geri tuşu | — | `@capacitor/app`: önce pencereyi kapatır, sonra Özet’e döner, en son uygulamadan çıkar |
+
+### Test APK'sı (bilgisayar gerekmeden)
+
+`main` dalına her gönderimde GitHub Actions bir test APK'sı derler:
+GitHub → **Actions** → **Android APK** → son çalışma → **Artifacts** → `kasa-defteri-debug-apk`.
+Zip'i aç, `app-debug.apk` dosyasını telefona at ve kur (bilinmeyen kaynaklardan yüklemeye izin vermen gerekir).
+
+### Bilgisayarda geliştirme
+
+Gerekenler: Node.js 22+, Android için Android Studio (JDK 21 ile gelir), iOS için macOS + Xcode 16+.
 
 ```bash
-npm init -y
-npm i @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios
-npx cap init "Kasa Defteri" com.ornek.kasadefteri --web-dir www
-npx cap add android && npx cap add ios
-npx cap open android   # Android Studio
-npx cap open ios       # Xcode (macOS gerekir)
+npm install
+npm run android   # web dosyalarını aktarır ve Android Studio'yu açar
+npm run ios       # web dosyalarını aktarır ve Xcode'u açar (macOS)
 ```
 
-Mağazaya çıkmadan önce önerilenler:
+`www/` içinde değişiklik yaptıktan sonra `npm run sync` çalıştır. İkon ya da açılış ekranını değiştirmek için `assets/` içindeki PNG'leri güncelleyip `npm run assets` çalıştır.
 
-1. **Kalıcı depolama:** `js/app.js` içindeki `store` nesnesini `@capacitor/preferences` ya da SQLite ile değiştir (iOS, WebView localStorage'ını temizleyebilir).
-2. **Bildirimler:** `@capacitor/local-notifications` ile son ödeme gününden önce hatırlatma.
-3. **İkonlar ve açılış ekranı:** `@capacitor/assets` ile PNG ikon setleri üret.
-4. **Gelir modeli:** ücretli uygulama ya da uygulama içi satın alma (ör. bulut yedekleme, çoklu cihaz eşitleme, PDF rapor).
-5. **Gizlilik politikası:** mağazalar ister; veriler cihazda kaldığı için kısa tutulabilir.
+### Mağazaya çıkış kontrol listesi
+
+1. **Uygulama kimliği:** `capacitor.config.json` içindeki `com.kasadefteri.app` değerini kendi alan adınla değiştir (ör. `com.seninsirketin.kasadefteri`). Mağazaya çıktıktan sonra değiştirilemez. Değiştirdikten sonra `android/` ve `ios/` klasörlerini silip `npx cap add android && npx cap add ios && npm run assets` ile yeniden oluştur.
+2. **Google Play:** Play Console geliştirici hesabı (tek seferlik 25 $). Android Studio → *Build → Generate Signed App Bundle* ile imzalı `.aab` üret; imza anahtarını güvenli sakla.
+3. **App Store:** Apple Developer Program (yıllık 99 $), Xcode'da *Signing & Capabilities* altında takımını seç, *Product → Archive* ile yükle.
+4. **Gizlilik politikası:** Mağazalar ister. Veriler cihazda kaldığı ve hiçbir sunucuya gitmediği için kısa bir metin yeterli; Play'in “Veri güvenliği” formunda “veri toplanmıyor” seçilebilir.
+5. **Gelir modeli:** Ücretli uygulama ya da ücretsiz + uygulama içi satın alma (ör. bulut yedekleme, çoklu cihaz eşitleme, PDF rapor, sınırsız plan). Uygulama içi satın alma için RevenueCat (`@revenuecat/purchases-capacitor`) kolay bir seçenek.
