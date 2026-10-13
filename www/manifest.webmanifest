@@ -1,0 +1,15 @@
+{
+  "name": "Kasa Defteri",
+  "short_name": "Kasa Defteri",
+  "description": "Gelir, gider ve düzenli ödeme (kredi, kart, aidat, fatura) takibi.",
+  "lang": "tr",
+  "start_url": "./index.html#ozet",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f5f8",
+  "theme_color": "#2b3a8c",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
