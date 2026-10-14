@@ -50,9 +50,11 @@ capacitor.config.json   uygulama kimliği ve eklenti ayarları
 
 ### Test APK'sı (bilgisayar gerekmeden)
 
-`main` dalına her gönderimde GitHub Actions bir test APK'sı derler:
-GitHub → **Actions** → **Android APK** → son çalışma → **Artifacts** → `kasa-defteri-debug-apk`.
-Zip'i aç, `app-debug.apk` dosyasını telefona at ve kur (bilinmeyen kaynaklardan yüklemeye izin vermen gerekir).
+`main` dalına her gönderimde GitHub Actions bir test APK'sı derler ve şu sabit bağlantıya koyar:
+
+**https://github.com/hako54/Gelir-gider/releases/download/apk-latest/kasa-defteri.apk**
+
+Bağlantıyı telefonda aç, inen dosyaya dokunup kur (bilinmeyen kaynaklardan yüklemeye izin vermen gerekir).
 
 ### Bilgisayarda geliştirme
 

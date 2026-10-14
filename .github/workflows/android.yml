@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,8 +34,24 @@ jobs:
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
 
+      - name: APK dosyasını adlandır
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk kasa-defteri.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: kasa-defteri-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: kasa-defteri.apk
           retention-days: 30
+
+      # Sabit indirme bağlantısı:
+      # https://github.com/<kullanıcı>/<depo>/releases/download/apk-latest/kasa-defteri.apk
+      - name: Release'e yükle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Kasa Defteri – test APK
+          body: |
+            Son test sürümü (commit ${{ github.sha }}).
+            Telefona indirip kurun; bilinmeyen kaynaklardan yüklemeye izin vermeniz gerekir.
+          prerelease: true
+          files: kasa-defteri.apk
