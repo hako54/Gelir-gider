@@ -37,6 +37,12 @@ assets/                 ikon ve açılış ekranı kaynakları
 capacitor.config.json   uygulama kimliği ve eklenti ayarları
 ```
 
+## iPhone'da kullanma (kurulum gerektirmez)
+
+Web sürümü her gönderimde **https://hako54.github.io/Gelir-gider/** adresinde yayınlanır.
+iPhone'da **Safari** ile aç → Paylaş düğmesi → **Ana Ekrana Ekle**. Uygulama ana ekranda kendi ikonuyla açılır, internetsiz de çalışır; veriler telefonda saklanır.
+(Bildirimler bu yolda yoktur; bildirimler için App Store / TestFlight sürümü gerekir.)
+
 ## Android ve iOS uygulaması (Capacitor)
 
 `android/` ve `ios/` klasörleri hazır native projelerdir; `www/` içindeki uygulamayı çalıştırırlar.

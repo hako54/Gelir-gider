@@ -1,6 +1,6 @@
 /* Çevrimdışı çalışma için basit önbellek. Sürüm değişince eski önbellek silinir. */
-const CACHE = 'kasadefteri-v2';
-const ASSETS = ['./', './index.html', './css/styles.css', './js/capacitor.js', './js/app.js', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'kasadefteri-v3';
+const ASSETS = ['./', './index.html', './css/styles.css', './js/capacitor.js', './js/app.js', './manifest.webmanifest', './icons/icon.svg', './icons/apple-touch-icon.png', './icons/icon-192.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
